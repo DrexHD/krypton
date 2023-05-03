@@ -88,7 +88,7 @@ public abstract class ThreadedAnvilChunkStorageMixin {
                 }
 
                 // Loop through & unload chunks if removed
-                unloadChunks(player, chunkPosX, chunkPosZ, watchDistance);
+                unloadChunks(player, chunkPosX, chunkPosZ, watchDistance + 1);
             }
         } finally {
             AutoFlushUtil.setAutoFlush(player, true);
@@ -189,15 +189,17 @@ public abstract class ThreadedAnvilChunkStorageMixin {
 
             int playerViewDistance = getPlayerViewDistance(player); // +1 for buffer
 
+            int increasedWatchDistance = this.watchDistance + 1;
+
             if (shouldReloadAllChunks(player)) { // Player updated view distance, unload chunks & resend (only unload chunks not visible)
                 //noinspection InstanceofIncompatibleInterface
                 if (player instanceof KryptonServerPlayerEntity kryptonPlayer)
                     kryptonPlayer.setNeedsChunksReloaded(false);
 
-                for (int curX = newChunkX - watchDistance - 1; curX <= newChunkX + watchDistance + 1; ++curX) {
-                    for (int curZ = newChunkZ - watchDistance - 1; curZ <= newChunkZ + watchDistance + 1; ++curZ) {
+                for (int curX = newChunkX - increasedWatchDistance; curX <= newChunkX + increasedWatchDistance; ++curX) {
+                    for (int curZ = newChunkZ - increasedWatchDistance; curZ <= newChunkZ + increasedWatchDistance; ++curZ) {
                         ChunkPos chunkPos = new ChunkPos(curX, curZ);
-                        boolean inNew = isWithinDistance(curX, curZ, newChunkX, newChunkZ, playerViewDistance);
+                        boolean inNew = isWithinDistance(curX, curZ, newChunkX, newChunkZ, playerViewDistance - 1);
 
                         this.sendWatchPackets(player, chunkPos, new MutableObject<>(), true, inNew);
                     }
@@ -211,7 +213,7 @@ public abstract class ThreadedAnvilChunkStorageMixin {
 
                 // Unload previous chunks
                 // Chunk unload packets are very light, so we can just do it like this
-                unloadChunks(player, oldChunkX, oldChunkZ, watchDistance);
+                unloadChunks(player, oldChunkX, oldChunkZ, watchDistance + 1);
 
                 // Send new chunks
                 sendSpiralChunkWatchPackets(player);
@@ -227,8 +229,8 @@ public abstract class ThreadedAnvilChunkStorageMixin {
                 for (int curX = minSendChunkX; curX <= maxSendChunkX; ++curX) {
                     for (int curZ = minSendChunkZ; curZ <= maxSendChunkZ; ++curZ) {
                         ChunkPos chunkPos = new ChunkPos(curX, curZ);
-                        boolean inOld = isWithinDistance(curX, curZ, oldChunkX, oldChunkZ, playerViewDistance);
-                        boolean inNew = isWithinDistance(curX, curZ, newChunkX, newChunkZ, playerViewDistance);
+                        boolean inOld = isWithinDistance(curX, curZ, oldChunkX, oldChunkZ, playerViewDistance - 1);
+                        boolean inNew = isWithinDistance(curX, curZ, newChunkX, newChunkZ, playerViewDistance - 1);
                         this.sendWatchPackets(player, chunkPos, new MutableObject<>(), inOld, inNew);
                     }
                 }
@@ -254,7 +256,7 @@ public abstract class ThreadedAnvilChunkStorageMixin {
         int maxI = t * t * 2;
         for (int i = 0; i < maxI; i++) {
             if ((-playerViewDistance <= x) && (x <= playerViewDistance) && (-playerViewDistance <= z) && (z <= playerViewDistance)) {
-                boolean inNew = isWithinDistance(chunkPosX, chunkPosZ, chunkPosX + x, chunkPosZ + z, playerViewDistance);
+                boolean inNew = isWithinDistance(chunkPosX, chunkPosZ, chunkPosX + x, chunkPosZ + z, playerViewDistance - 1);
 
                 this.sendWatchPackets(player,
                         new ChunkPos(chunkPosX + x, chunkPosZ + z),
@@ -272,8 +274,8 @@ public abstract class ThreadedAnvilChunkStorageMixin {
     }
 
     private void unloadChunks(ServerPlayerEntity player, int chunkPosX, int chunkPosZ, int distance) {
-        for (int curX = chunkPosX - distance - 1; curX <= chunkPosX + distance + 1; ++curX) {
-            for (int curZ = chunkPosZ - distance - 1; curZ <= chunkPosZ + distance + 1; ++curZ) {
+        for (int curX = chunkPosX - distance; curX <= chunkPosX + distance; ++curX) {
+            for (int curZ = chunkPosZ - distance; curZ <= chunkPosZ + distance; ++curZ) {
                 ChunkPos chunkPos = new ChunkPos(curX, curZ);
 
                 this.sendWatchPackets(player, chunkPos, new MutableObject<>(), true, false);
@@ -282,15 +284,16 @@ public abstract class ThreadedAnvilChunkStorageMixin {
     }
 
     private int getPlayerViewDistance(ServerPlayerEntity playerEntity) {
+        int increasedWatchDistance = this.watchDistance + 1;
         //noinspection InstanceofIncompatibleInterface
         return playerEntity instanceof KryptonServerPlayerEntity kryptonPlayerEntity
                ? kryptonPlayerEntity.getPlayerViewDistance() != -1
                  // if -1, the view distance hasn't been set
                  // We *actually* need to send view distance + 1, because mc doesn't render chunks adjacent to unloaded ones
-                 ? Math.min(this.watchDistance,
+                 ? Math.min(increasedWatchDistance,
                             kryptonPlayerEntity.getPlayerViewDistance() +
                             1)
-                 : this.watchDistance : this.watchDistance;
+                 : increasedWatchDistance : increasedWatchDistance;
     }
 
     private boolean shouldReloadAllChunks(ServerPlayerEntity playerEntity) {
